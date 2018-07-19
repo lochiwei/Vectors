@@ -3,9 +3,15 @@
 /*
  TODO: Todo List
  ( ) more general vectors allowing variable length of elements
+ (v) merge Vector2D, Vector3D, Vector4D into a universal Vector protocol?
+ (v) vector subscript?
+ ( ) allow vector addition with different dimensions?
+ (v) merge CGFloat, Float -> RealNumber (protocol)?
+ ( ) RealVector expressible by [Float] and [CGFloat] ...
  
  History:
  - 2018.03.23: version 1.0
+ - 2018.07.07: add Vector4D
  */
 
 import UIKit
@@ -30,186 +36,250 @@ extension Field {
     }
 }
 
+// MARK: - protocol Real Number: Field
+public protocol RealNumber: Field {
+    var realValue: Float { get set }
+    init(_ a:Float)
+}
+
+// 讓不同類別的 RealNumber 可以做四則運算
+public func + <U:RealNumber, V:RealNumber>(a:U, b:V) -> U {
+    return U.init(a.realValue + b.realValue)
+}
+
+public func - <U:RealNumber, V:RealNumber>(a:U, b:V) -> U {
+    return U.init(a.realValue - b.realValue)
+}
+
+public func * <U:RealNumber, V:RealNumber>(a:U, b:V) -> U {
+    return U.init(a.realValue * b.realValue)
+}
+
+public func / <U:RealNumber, V:RealNumber>(a:U, b:V) -> U {
+    return U.init(a.realValue / b.realValue)
+}
+
+
 // MARK: - Vector (protocol)
-public protocol Vector {
+public protocol Vector: ExpressibleByArrayLiteral {
+    
     associatedtype Scalar:Field
+    
+    static var dimension: Int { get }
+    var coordinates: [Scalar] { get set }
+    
+    init()
+    init(arrayLiteral: Scalar...)
+    
     static func + (u:Self, v:Self) -> Self   // vector addition
     static prefix func - (u:Self) -> Self    // additive inverse
     static func * (a:Scalar, v:Self) -> Self // scalar multiplication
+    
+    subscript(i:Int) -> Scalar { get set }
 }
 
 // MARK: - extension Vector
 
 extension Vector {
+    
+    public subscript(i:Int) -> Scalar {
+        get {
+            return coordinates[i]
+        }
+        set {
+            var coords = self.coordinates
+            coords[i] = newValue
+            self = Self.init()
+            self.coordinates = coords
+        }
+    }
+    
+    // default +
+    public static func + (u:Self, v:Self) -> Self {
+        var coords = [Scalar]()
+        for i in 0...(Self.dimension - 1) {
+            coords.append(u[i] + v[i])
+        }
+        var vec = Self.init()
+        vec.coordinates = coords
+        return vec
+    }
+    
+    // default -v
+    static public prefix func - (u:Self) -> Self {
+        var coords = [Scalar]()
+        for i in 0...(Self.dimension - 1) {
+            coords.append(-u[i])
+        }
+        var vec = Self.init()
+        vec.coordinates = coords
+        return vec
+    }
+    
+    // default *
+    public static func * (a:Scalar, v:Self) -> Self {
+        var coords = [Scalar]()
+        for i in 0...(Self.dimension - 1) {
+            coords.append(a * v[i])
+        }
+        var vec = Self.init()
+        vec.coordinates = coords
+        return vec
+    }
+    
+    // default operations
     public static func - (u:Self, v:Self) -> Self { return u + (-v) }
     public static func * (v:Self, a:Scalar) -> Self { return a * v }
     public static func += (u:inout Self, v:Self) { u = u + v }
     public static func -= (u:inout Self, v:Self) { u = u - v }
     public static func *= (u:inout Self, a:Scalar) { u = u * a }
-}
-
-// MARK: - Vector2D (inherited protocol)
-
-public protocol Vector2D: Vector, ExpressibleByArrayLiteral {
-    var x: Scalar { get set }
-    var y: Scalar { get set }
-    init(x:Scalar, y:Scalar)
-}
-
-// MARK: - extension Vector2D
-
-extension Vector2D {
-    // default operations
-    public static func + (u:Self, v:Self) -> Self {
-        return Self(x: u.x + v.x, y: u.y + v.y)
-    }
-    public static prefix func - (p:Self) -> Self {
-        return Self(x: -p.x, y: -p.y)
-    }
-    public static func * (a:Scalar, p:Self) -> Self {
-        return Self(x: a * p.x, y: a * p.y)
-    }
+    
     // default initializers
     public init(arrayLiteral elements: Scalar...) {
-        assert(elements.count >= 2, "Vector2D needs at least 2 numbers.")
-        self = Self(x: elements[0], y: elements[1])
+        var coords = elements
+        if coords.count < Self.dimension {
+            let n = Self.dimension - coords.count
+            for _ in 1...n { coords.append(.zero) }
+        }
+        self.init()
+        self.coordinates = coords
     }
-    public init<V:Vector2D>(_ v:V) where V.Scalar == Scalar {
-        self = Self.init(x: v.x, y: v.y)
+    
+    public init<V:Vector>(_ v:V) where V.Scalar == Scalar {
+        self.init()
+        self.coordinates = v.coordinates
     }
 }
 
-// 讓不同型別的二維向量可以相加
+
+// 讓不同型別的向量可以相加
 // U + V -> U
-public func + <U:Vector2D, V:Vector2D>(u:U, v:V) -> U where U.Scalar == V.Scalar {
+public func + <U:Vector, V:Vector>(u:U, v:V) -> U where U.Scalar == V.Scalar {
     return u + U.init(v)
 }
 
-// MARK: - Vector3D (inherited protocol)
-
-public protocol Vector3D: Vector, ExpressibleByArrayLiteral {
-    var x: Scalar { get set }
-    var y: Scalar { get set }
-    var z: Scalar { get set }
-    init(x:Scalar, y:Scalar, z:Scalar)
+// MARK: - Real Vector
+public protocol RealVector: Vector where Scalar: RealNumber {
+    
 }
 
-// MARK: - extension Vector2D
-
-extension Vector3D {
-    // default operations
-    public static func + (u:Self, v:Self) -> Self {
-        return Self(x: u.x + v.x, y: u.y + v.y, z: u.z + v.z)
-    }
-    public static prefix func - (p:Self) -> Self {
-        return Self(x: -p.x, y: -p.y, z: -p.z)
-    }
-    public static func * (a:Scalar, p:Self) -> Self {
-        return Self(x: a * p.x, y: a * p.y, z: a * p.z)
-    }
-    // default initializers
-    public init(arrayLiteral elements: Scalar...) {
-        assert(elements.count >= 3, "Vector3D needs at least 3 numbers.")
-        self = Self(x: elements[0], y: elements[1], z: elements[2])
-    }
-    public init<V:Vector3D>(_ v:V) where V.Scalar == Scalar {
-        self = Self.init(x: v.x, y: v.y, z: v.z)
+extension RealVector {
+    // let RealVector can initialize with another (different type) RealVector
+    public init<V:RealVector>(_ v:V) {
+        var coords = [Self.Scalar]()
+        for i in 0...(Self.dimension - 1) {
+            coords.append(Self.Scalar.init(v[i].realValue))
+        }
+        self.init()
+        self.coordinates = coords
     }
 }
 
-// 讓不同型別的 3D 向量可以相加
-// U + V -> U
-public func + <U:Vector3D, V:Vector3D>(u:U, v:V) -> U where U.Scalar == V.Scalar {
-    return u + U.init(v)
-}
-
-// MARK: - Fields (Field conforming types)
+// MARK: - RealNumber (conforming types)
 
 // CGFloat as vector scalars
-extension CGFloat: Field {
+extension CGFloat: RealNumber {
     public static let zero: CGFloat = 0
+    public var realValue: Float {
+        get { return Float(self) }
+        set { self = CGFloat(newValue) }
+    }
 }
 
 // Float as vector scalars
-extension Float: Field {
+extension Float: RealNumber {
     public static let zero: Float = 0
-}
-
-// MARK: -  2D Vectors (Vector2D conforming types)
-
-// CGPoint as Vector2D
-extension CGPoint:Vector2D {
-    public typealias Scalar = CGFloat
-}
-
-// CGVector as Vector2D
-extension CGVector: Vector2D {
-    
-    public typealias Scalar = CGFloat
-    
-    public var x: CGFloat {
-        get { return dx }
-        set(newX) { dx = newX }
-    }
-    
-    public var y: CGFloat {
-        get { return dy }
-        set(newY) { dy = newY }
-    }
-    
-    public init(x: Scalar, y: Scalar) {
-        self.init()
-        dx = x
-        dy = y
+    public var realValue: Float {
+        get { return self }
+        set { self = newValue }
     }
 }
 
-// CGSize as Vector2D
-extension CGSize: Vector2D {
+// MARK: -  RealVector (Conforming Types)
+
+// CGPoint
+extension CGPoint: RealVector {
     
     public typealias Scalar = CGFloat
+    public static var dimension: Int { return 2 }
     
-    public var x: CGFloat {
-        get { return width }
-        set(newX) { width = newX }
-    }
-    
-    public var y: CGFloat {
-        get { return height }
-        set(newY) { height = newY }
-    }
-    
-    public init(x: Scalar, y: Scalar) {
-        self.init()
-        width = x
-        height = y
+    public var coordinates: [CGFloat] {
+        get { return [x, y] }
+        set {
+            let n = newValue.count
+            x = n > 0 ? newValue[0] : 0
+            y = n > 1 ? newValue[1] : 0
+        }
+        
     }
 }
 
-// MARK: -  3D Vectors (Vector3D conforming types)
+// CGVector
+extension CGVector: RealVector {
+    
+    public typealias Scalar = CGFloat
+    public static var dimension: Int { return 2 }
+    
+    public var coordinates: [CGFloat] {
+        get { return [dx, dy] }
+        set {
+            let n = newValue.count
+            dx = n > 0 ? newValue[0] : 0
+            dy = n > 1 ? newValue[1] : 0
+        }
+    }
+}// end: extension CGVector
 
-// SCNVector3 as Vector3D
-extension SCNVector3: Vector3D {
+// CGSize as Vector
+extension CGSize: RealVector {
+    
+    public typealias Scalar = CGFloat
+    public static var dimension: Int { return 2 }
+    
+    public var coordinates: [CGFloat] {
+        get { return [width, height] }
+        set {
+            let n = newValue.count
+            width = n > 0 ? newValue[0] : 0
+            height = n > 1 ? newValue[1] : 0
+        }
+    }
+}
+
+
+// SCNVector3 as Vector
+extension SCNVector3: RealVector {
+    
     public typealias Scalar = Float // scalar field
+    public static var dimension: Int { return 3 }
+    
+    public var coordinates: [Float] {
+        get { return [x, y, z] }
+        set {
+            let n = newValue.count
+            x = n > 0 ? newValue[0] : 0
+            y = n > 1 ? newValue[1] : 0
+            z = n > 2 ? newValue[2] : 0
+        }
+        
+    }
 }
 
-// MARK: - 4D Vectors ?
-
-// extensions - CGRect
-extension CGRect: ExpressibleByArrayLiteral {
+// SCNVector4 as Vector4D
+extension SCNVector4: RealVector {
     
-    // rect = [10, 10, 40, 30]
-    public init(arrayLiteral elements: CGFloat...) {
-        assert(elements.count >= 4, "CGRect needs: x, y, width, height.")
-        self.init(x: elements[0], y: elements[1], width: elements[2], height: elements[3])
+    public typealias Scalar = Float // scalar field
+    public static var dimension: Int { return 4 }
+    
+    public var coordinates: [Float] {
+        get { return [x, y, z, w] }
+        set {
+            let n = newValue.count
+            x = n > 0 ? newValue[0] : 0
+            y = n > 1 ? newValue[1] : 0
+            z = n > 2 ? newValue[2] : 0
+            w = n > 3 ? newValue[3] : 0
+        }
+        
     }
-    
-    // get: rect.center
-    // set: rect.center = [10, 20]
-    public var center: CGPoint {
-        get { return [midX, midY] }
-        set (newCenter) { origin += newCenter - center }
-    }
-    
 }
-
