@@ -6,7 +6,7 @@
 //  Copyright © 2018年 Lo Chiwei. All rights reserved.
 //
 
-import Foundation
+import UIKit
 
 // MARK: - RealNumber (protocol)
 
